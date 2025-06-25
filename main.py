@@ -111,3 +111,16 @@ def delete_candidates(key: str, ids: List[str] = Body(...)):
         return {"status": "ok", "deleted": ids}
     except Exception as e:
         return JSONResponse(content={"error": str(e)}, status_code=500)
+@app.get("/init")
+def init_collection(key: str):
+    if key != API_TOKEN:
+        return JSONResponse(content={"error": "unauthorized"}, status_code=401)
+
+    try:
+        qdrant.recreate_collection(
+            collection_name=COLLECTION_NAME,
+            vectors_config=VectorParams(size=384, distance=Distance.COSINE)
+        )
+        return {"status": "collection created", "collection": COLLECTION_NAME}
+    except Exception as e:
+        return JSONResponse(content={"error": str(e)}, status_code=500)
