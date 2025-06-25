@@ -1,3 +1,39 @@
+from fastapi import FastAPI, Query, Request, Body
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
+from typing import List, Optional
+from sentence_transformers import SentenceTransformer
+from qdrant_client import QdrantClient
+from qdrant_client.http.models import (
+    PointStruct, Distance, VectorParams,
+    Filter, FieldCondition, MatchValue
+)
+from fastapi.responses import JSONResponse
+from uuid import uuid4
+
+from config import API_TOKEN, QDRANT_HOST, QDRANT_API_KEY
+
+app = FastAPI()
+model = SentenceTransformer("paraphrase-albert-small-v2")
+qdrant = QdrantClient(url=QDRANT_HOST, api_key=QDRANT_API_KEY)
+COLLECTION_NAME = "cv_index"
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+class SearchResult(BaseModel):
+    id: str
+    score: float
+    id_candidat: str = None
+    nom: str = None
+    prenom: str = None
+    email: str = None
+    poste_recherche_candidat: str = None
+
 @app.get("/search", response_model=List[SearchResult])
 def search(q: str, key: str, domainemycv: Optional[str] = None):
     if key != API_TOKEN:
@@ -17,7 +53,7 @@ def search(q: str, key: str, domainemycv: Optional[str] = None):
         query_vector=query_vector,
         limit=10,
         with_payload=True,
-        filter=search_filter
+        query_filter=search_filter  # ✅ corrigé ici
     )
 
     return [
@@ -32,8 +68,6 @@ def search(q: str, key: str, domainemycv: Optional[str] = None):
         )
         for res in results
     ]
-from fastapi import Body
-from qdrant_client.http.models import PointStruct
 
 @app.post("/index-payload")
 def index_payload(payload: List[dict] = Body(...)):
