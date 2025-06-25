@@ -7,18 +7,15 @@ from sentence_transformers import SentenceTransformer
 from qdrant_client import QdrantClient
 from qdrant_client.http.models import (
     PointStruct, Distance, VectorParams,
-    Filter, FieldCondition, MatchValue,
-    SearchRequest
+    Filter, FieldCondition, MatchValue
 )
 from config import API_TOKEN, QDRANT_HOST, QDRANT_API_KEY
 
-# Init
 app = FastAPI()
 model = SentenceTransformer("all-MiniLM-L6-v2")
 qdrant = QdrantClient(url=QDRANT_HOST, api_key=QDRANT_API_KEY)
 COLLECTION_NAME = "cv_index"
 
-# CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -26,7 +23,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Modèle de retour
 class SearchResult(BaseModel):
     id: str
     score: float
@@ -36,25 +32,24 @@ class SearchResult(BaseModel):
     email: Optional[str]
     poste_recherche_candidat: Optional[str]
 
-# 🔍 Recherche sémantique
 @app.get("/search", response_model=List[SearchResult])
 def search(q: str, key: str, domainemycv: Optional[str] = None):
     if key != API_TOKEN:
         return JSONResponse(content={"error": "unauthorized"}, status_code=401)
     try:
         query_vector = model.encode(q).tolist()
-        search_filter = None
+        query_filter = None
         if domainemycv:
-            search_filter = Filter(must=[
+            query_filter = Filter(must=[
                 FieldCondition(key="domainemycv", match=MatchValue(value=domainemycv))
             ])
-        request = SearchRequest(
-            vector=query_vector,
+        results = qdrant.search(
+            collection_name=COLLECTION_NAME,
+            query_vector=query_vector,
             limit=10,
             with_payload=True,
-            filter=search_filter
+            query_filter=query_filter
         )
-        results = qdrant.search(collection_name=COLLECTION_NAME, search_request=request)
         return [
             SearchResult(
                 id=res.id,
@@ -70,7 +65,6 @@ def search(q: str, key: str, domainemycv: Optional[str] = None):
     except Exception as e:
         return JSONResponse(content={"error": "search failed", "details": str(e)}, status_code=500)
 
-# 📥 Indexation
 @app.post("/index-payload")
 def index_payload(data: List[dict] = Body(...)):
     try:
@@ -91,7 +85,6 @@ def index_payload(data: List[dict] = Body(...)):
     except Exception as e:
         return JSONResponse(content={"error": "indexing failed", "details": str(e)}, status_code=500)
 
-# ❌ Suppression
 @app.delete("/delete-candidate/{id}")
 def delete_candidate(id: str, key: str):
     if key != API_TOKEN:
@@ -102,7 +95,6 @@ def delete_candidate(id: str, key: str):
     except Exception as e:
         return JSONResponse(content={"error": "deletion failed", "details": str(e)}, status_code=500)
 
-# 📋 Liste des candidats
 @app.get("/list")
 def list_all(key: str):
     if key != API_TOKEN:
