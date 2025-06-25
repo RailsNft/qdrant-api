@@ -73,11 +73,14 @@ def list_indexed(key: str):
     if key != API_TOKEN:
         return JSONResponse(content={"error": "unauthorized"}, status_code=401)
 
-    results, _ = qdrant.scroll(
-        collection_name=COLLECTION_NAME,
-        with_payload=True,
-        limit=10000
-    )
+    try:
+        results, _ = qdrant.scroll(
+            collection_name=COLLECTION_NAME,
+            with_payload=True,
+            limit=10000
+        )
+    except Exception as e:
+        return JSONResponse(content={"error": str(e)}, status_code=500)
 
     candidats = []
     for point in results:
@@ -111,6 +114,7 @@ def delete_candidates(key: str, ids: List[str] = Body(...)):
         return {"status": "ok", "deleted": ids}
     except Exception as e:
         return JSONResponse(content={"error": str(e)}, status_code=500)
+
 @app.get("/init")
 def init_collection(key: str):
     if key != API_TOKEN:
