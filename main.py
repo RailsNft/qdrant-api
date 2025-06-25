@@ -1,42 +1,3 @@
-from fastapi import FastAPI, Query, Request, Body
-from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
-from typing import List, Optional
-from sentence_transformers import SentenceTransformer
-from qdrant_client import QdrantClient
-from qdrant_client.http.models import (
-    PointStruct, Distance, VectorParams,
-    Filter, FieldCondition, MatchValue
-)
-from fastapi.responses import JSONResponse
-
-from config import API_TOKEN, QDRANT_HOST, QDRANT_API_KEY
-
-# ✅ App & modèle
-app = FastAPI()
-model = SentenceTransformer("all-MiniLM-L6-v2")
-qdrant = QdrantClient(url=QDRANT_HOST, api_key=QDRANT_API_KEY)
-COLLECTION_NAME = "cv_index"
-
-# CORS (optionnel)
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-# ✅ Modèle de sortie
-class SearchResult(BaseModel):
-    id: str
-    score: float
-    id_candidat: str = None
-    nom: str = None
-    prenom: str = None
-    email: str = None
-    poste_recherche_candidat: str = None
-
-# ✅ Endpoint principal
 @app.get("/search", response_model=List[SearchResult])
 def search(q: str, key: str, domainemycv: Optional[str] = None):
     if key != API_TOKEN:
@@ -71,3 +32,35 @@ def search(q: str, key: str, domainemycv: Optional[str] = None):
         )
         for res in results
     ]
+from fastapi import Body
+from qdrant_client.http.models import PointStruct
+
+@app.post("/index-payload")
+def index_payload(payload: List[dict] = Body(...)):
+    if not payload:
+        return {"error": "Empty payload"}
+
+    points = []
+    for row in payload:
+        texte = " ".join(str(v) for v in row.values() if isinstance(v, str)).strip()
+        vector = model.encode(texte).tolist()
+
+        point_id = row.get("id_candidat", str(uuid4()))
+        domain = row.get("domainemycv", "autre")
+
+        if not point_id or not domain:
+            return {"error": f"Missing id_candidat or domainemycv for row: {row}"}
+
+        points.append(PointStruct(
+            id=point_id,
+            vector=vector,
+            payload=row
+        ))
+
+    qdrant.upsert(
+        collection_name=COLLECTION_NAME,
+        wait=True,
+        points=points
+    )
+
+    return {"status": "ok", "indexed": len(points)}
