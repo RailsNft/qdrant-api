@@ -98,3 +98,15 @@ def index_payload(payload: List[dict] = Body(...)):
     )
 
     return {"status": "ok", "indexed": len(points)}
+@app.post("/delete")
+def delete_candidates(payload: dict = Body(...)):
+    ids = payload.get("ids")
+    if not ids or not isinstance(ids, list):
+        return {"error": "Missing or invalid 'ids'"}
+
+    qdrant.delete(
+        collection_name=COLLECTION_NAME,
+        points_selector={"points": ids}
+    )
+
+    return {"status": "deleted", "count": len(ids)}
