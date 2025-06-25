@@ -107,3 +107,17 @@ def list_all(key: str):
         }
     except Exception as e:
         return JSONResponse(content={"error": "listing failed", "details": str(e)}, status_code=500)
+
+@app.get("/create-index")
+def create_index(key: str):
+    if key != API_TOKEN:
+        return JSONResponse(content={"error": "unauthorized"}, status_code=401)
+    try:
+        qdrant.create_payload_index(
+            collection_name=COLLECTION_NAME,
+            field_name="domainemycv",
+            field_schema="keyword"
+        )
+        return {"status": "index created", "field": "domainemycv"}
+    except Exception as e:
+        return JSONResponse(content={"error": "index creation failed", "details": str(e)}, status_code=500)
