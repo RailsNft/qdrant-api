@@ -110,3 +110,30 @@ def delete_candidates(payload: dict = Body(...)):
     )
 
     return {"status": "deleted", "count": len(ids)}
+@app.get("/list")
+def list_indexed(key: str):
+    if key != API_TOKEN:
+        return JSONResponse(content={"error": "unauthorized"}, status_code=401)
+
+    # Récupère tous les points indexés
+    results = qdrant.scroll(
+        collection_name=COLLECTION_NAME,
+        with_payload=True,
+        limit=10000  # Limite max Qdrant Cloud gratuite
+    )
+
+    candidats = []
+    for point in results[0]:  # .scroll() retourne un tuple (points, next_offset)
+        payload = point.payload
+        candidats.append({
+            "id_candidat": payload.get("id_candidat"),
+            "nom_candidat": payload.get("nom_candidat"),
+            "prenom_candidat": payload.get("prenom_candidat"),
+            "email_candidat": payload.get("email_candidat"),
+            "domainemycv": payload.get("domainemycv")
+        })
+
+    return {
+        "total": len(candidats),
+        "candidats": candidats
+    }
