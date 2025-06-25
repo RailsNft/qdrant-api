@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Query
+from fastapi import FastAPI, Query, Body
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
@@ -38,14 +38,11 @@ def search(q: str, key: str, domainemycv: Optional[str] = None):
         return JSONResponse(content={"error": "unauthorized"}, status_code=401)
 
     query_vector = model.encode(q).tolist()
-
     search_filter = None
     try:
         if domainemycv:
             search_filter = Filter(
-                must=[
-                    FieldCondition(key="domainemycv", match=MatchValue(value=domainemycv))
-                ]
+                must=[FieldCondition(key="domainemycv", match=MatchValue(value=domainemycv))]
             )
     except Exception:
         search_filter = None
@@ -100,3 +97,17 @@ def list_indexed(key: str):
         "total": len(candidats),
         "candidats": candidats
     }
+
+@app.post("/delete")
+def delete_candidates(key: str, ids: List[str] = Body(...)):
+    if key != API_TOKEN:
+        return JSONResponse(content={"error": "unauthorized"}, status_code=401)
+
+    try:
+        qdrant.delete(
+            collection_name=COLLECTION_NAME,
+            points_selector={"points": ids}
+        )
+        return {"status": "ok", "deleted": ids}
+    except Exception as e:
+        return JSONResponse(content={"error": str(e)}, status_code=500)
