@@ -132,3 +132,13 @@ def delete_candidate(id: str, key: str = Query(...)):
 @app.get("/")
 def root():
     return {"status": "API OK"}
+@app.post("/encode")
+def encode_text(data: dict):
+    try:
+        text = data.get("text", "")
+        if not text:
+            return JSONResponse(status_code=400, content={"error": "Missing 'text' field"})
+        vector = model.encode(text).tolist()
+        return {"vector": vector}
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"error": "Encoding failed", "details": str(e)})
